@@ -226,4 +226,9 @@ public protocol DynamoDBCompositePrimaryKeyTable {
         partitionKeys: [String],
         attributesFilter: [String]?,
         additionalWhereClause: String?, nextToken: String?) -> EventLoopFuture<([TypedDatabaseItem<AttributesType, ItemType>], String?)>
+    
+    /**
+     Returns a `WriteTransaction` instance that can be then be executed against this table.
+     */
+    func initializeWriteTransaction() -> DynamoDBWriteTransaction
 }

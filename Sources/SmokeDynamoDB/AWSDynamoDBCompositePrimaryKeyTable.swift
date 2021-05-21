@@ -94,53 +94,19 @@ public class AWSDynamoDBCompositePrimaryKeyTable<InvocationReportingType: HTTPCl
     public func close() throws {
         try dynamodb.close()
     }
-
-    internal func getInputForInsert<AttributesType, ItemType>(_ item: TypedDatabaseItem<AttributesType, ItemType>) throws
-        -> DynamoDBModel.PutItemInput {
-            let attributes = try getAttributes(forItem: item)
-
-            let expressionAttributeNames = ["#pk": AttributesType.partitionKeyAttributeName, "#sk": AttributesType.sortKeyAttributeName]
-            let conditionExpression = "attribute_not_exists (#pk) AND attribute_not_exists (#sk)"
-
-            return DynamoDBModel.PutItemInput(conditionExpression: conditionExpression,
-                                              expressionAttributeNames: expressionAttributeNames,
-                                              item: attributes,
-                                              tableName: targetTableName)
-    }
-
-    internal func getInputForUpdateItem<AttributesType, ItemType>(
-            newItem: TypedDatabaseItem<AttributesType, ItemType>,
-            existingItem: TypedDatabaseItem<AttributesType, ItemType>) throws -> DynamoDBModel.PutItemInput {
-        let attributes = try getAttributes(forItem: newItem)
-
-        let expressionAttributeNames = [
-            "#rowversion": RowStatus.CodingKeys.rowVersion.stringValue,
-            "#createdate": TypedDatabaseItem<AttributesType, ItemType>.CodingKeys.createDate.stringValue]
-        let expressionAttributeValues = [
-            ":versionnumber": DynamoDBModel.AttributeValue(N: String(existingItem.rowStatus.rowVersion)),
-            ":creationdate": DynamoDBModel.AttributeValue(S: existingItem.createDate.iso8601)]
-
-        let conditionExpression = "#rowversion = :versionnumber AND #createdate = :creationdate"
-
-        return DynamoDBModel.PutItemInput(conditionExpression: conditionExpression,
-                                                      expressionAttributeNames: expressionAttributeNames,
-                                                      expressionAttributeValues: expressionAttributeValues,
-                                                      item: attributes,
-                                                      tableName: targetTableName)
-    }
-
-    internal func getAttributes<AttributesType, ItemType>(forItem item: TypedDatabaseItem<AttributesType, ItemType>) throws
-        -> [String: DynamoDBModel.AttributeValue] {
-            let attributeValue = try DynamoDBEncoder().encode(item)
-
-            let attributes: [String: DynamoDBModel.AttributeValue]
-            if let itemAttributes = attributeValue.M {
-                attributes = itemAttributes
-            } else {
-                throw SmokeDynamoDBError.unexpectedResponse(reason: "Expected a map.")
+    
+    public func initializeWriteTransaction() -> DynamoDBWriteTransaction {
+        func executeHandler(transactItems: TransactWriteItemList) -> EventLoopFuture<Void> {
+            let input = TransactWriteItemsInput(transactItems: transactItems)
+            
+            return self.dynamodb.transactWriteItems(input: input) .map { _ in
+                // return null on success
+                return
             }
-
-            return attributes
+        }
+        
+        return AWSDynamoDBWriteTransaction(targetTableName: self.targetTableName,
+                                           executeHandler: executeHandler)
     }
 
     internal func getInputForGetItem<AttributesType>(forKey key: CompositePrimaryKey<AttributesType>) throws -> DynamoDBModel.GetItemInput {
@@ -171,41 +137,6 @@ public class AWSDynamoDBCompositePrimaryKeyTable<InvocationReportingType: HTTPCl
                                                   keys: keys)
         
         return DynamoDBModel.BatchGetItemInput(requestItems: [self.targetTableName: keysAndAttributes])
-    }
-
-    internal func getInputForDeleteItem<AttributesType>(forKey key: CompositePrimaryKey<AttributesType>) throws -> DynamoDBModel.DeleteItemInput {
-        let attributeValue = try DynamoDBEncoder().encode(key)
-
-        if let keyAttributes = attributeValue.M {
-            return DynamoDBModel.DeleteItemInput(key: keyAttributes,
-                                                 tableName: targetTableName)
-        } else {
-            throw SmokeDynamoDBError.unexpectedResponse(reason: "Expected a structure.")
-        }
-    }
-    
-    internal func getInputForDeleteItem<AttributesType, ItemType>(
-            existingItem: TypedDatabaseItem<AttributesType, ItemType>) throws -> DynamoDBModel.DeleteItemInput {
-        let attributeValue = try DynamoDBEncoder().encode(existingItem.compositePrimaryKey)
-        
-        guard let keyAttributes = attributeValue.M else {
-            throw SmokeDynamoDBError.unexpectedResponse(reason: "Expected a structure.")
-        }
-
-        let expressionAttributeNames = [
-            "#rowversion": RowStatus.CodingKeys.rowVersion.stringValue,
-            "#createdate": TypedDatabaseItem<AttributesType, ItemType>.CodingKeys.createDate.stringValue]
-        let expressionAttributeValues = [
-            ":versionnumber": DynamoDBModel.AttributeValue(N: String(existingItem.rowStatus.rowVersion)),
-            ":creationdate": DynamoDBModel.AttributeValue(S: existingItem.createDate.iso8601)]
-
-        let conditionExpression = "#rowversion = :versionnumber AND #createdate = :creationdate"
-
-        return DynamoDBModel.DeleteItemInput(conditionExpression: conditionExpression,
-                                             expressionAttributeNames: expressionAttributeNames,
-                                             expressionAttributeValues: expressionAttributeValues,
-                                             key: keyAttributes,
-                                             tableName: targetTableName)
     }
 }
 

@@ -29,7 +29,7 @@ public extension AWSDynamoDBCompositePrimaryKeyTable {
             where AttributesType: PrimaryKeyAttributes, ItemType: Decodable, ItemType: Encodable {
         let putItemInput: DynamoDBModel.PutItemInput
         do {
-            putItemInput = try getInputForInsert(item)
+            putItemInput = try DynamoDBModel.PutItemInput.getInputForInsert(item, targetTableName: self.targetTableName)
         } catch {
             let promise = self.eventLoop.makePromise(of: Void.self)
             promise.fail(error)
@@ -43,7 +43,7 @@ public extension AWSDynamoDBCompositePrimaryKeyTable {
             where AttributesType: PrimaryKeyAttributes, ItemType: Decodable, ItemType: Encodable {
         let attributes: [String: AttributeValue]
         do {
-            attributes = try getAttributes(forItem: item)
+            attributes = try DynamoDBModel.AttributeValue.getAttributes(forItem: item)
         } catch {
             let promise = self.eventLoop.makePromise(of: Void.self)
             promise.fail(error)
@@ -61,7 +61,9 @@ public extension AWSDynamoDBCompositePrimaryKeyTable {
             where AttributesType: PrimaryKeyAttributes, ItemType: Decodable, ItemType: Encodable {
         let putItemInput: DynamoDBModel.PutItemInput
         do {
-            putItemInput = try getInputForUpdateItem(newItem: newItem, existingItem: existingItem)
+            putItemInput = try DynamoDBModel.PutItemInput.getInputForUpdateItem(newItem: newItem,
+                                                                                existingItem: existingItem,
+                                                                                targetTableName: self.targetTableName)
         } catch {
             let promise = self.eventLoop.makePromise(of: Void.self)
             promise.fail(error)
@@ -112,7 +114,8 @@ public extension AWSDynamoDBCompositePrimaryKeyTable {
             where AttributesType: PrimaryKeyAttributes {
         let deleteItemInput: DynamoDBModel.DeleteItemInput
         do {
-            deleteItemInput = try getInputForDeleteItem(forKey: key)
+            deleteItemInput = try DynamoDBModel.DeleteItemInput.getInputForDeleteItem(forKey: key,
+                                                                                      targetTableName: self.targetTableName)
         } catch {
             let promise = self.eventLoop.makePromise(of: Void.self)
             promise.fail(error)
@@ -129,7 +132,8 @@ public extension AWSDynamoDBCompositePrimaryKeyTable {
             where AttributesType : PrimaryKeyAttributes, ItemType : Decodable, ItemType : Encodable {
         let deleteItemInput: DynamoDBModel.DeleteItemInput
         do {
-            deleteItemInput = try getInputForDeleteItem(existingItem: existingItem)
+            deleteItemInput = try DynamoDBModel.DeleteItemInput.getInputForDeleteItem(existingItem: existingItem,
+                                                                                      targetTableName: self.targetTableName)
         } catch {
             let promise = self.eventLoop.makePromise(of: Void.self)
             promise.fail(error)

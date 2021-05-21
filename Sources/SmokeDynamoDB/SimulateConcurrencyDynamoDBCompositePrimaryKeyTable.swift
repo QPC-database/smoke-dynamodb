@@ -220,4 +220,9 @@ public class SimulateConcurrencyDynamoDBCompositePrimaryKeyTable: DynamoDBCompos
                                                      scanIndexForward: scanIndexForward,
                                                      exclusiveStartKey: exclusiveStartKey)
     }
+    
+    public func initializeWriteTransaction() -> DynamoDBWriteTransaction {
+        // simply delegate to the wrapped implementation
+        return self.wrappedDynamoDBTable.initializeWriteTransaction()
+    }
 }

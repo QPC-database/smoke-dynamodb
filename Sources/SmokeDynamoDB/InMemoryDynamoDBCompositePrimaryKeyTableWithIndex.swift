@@ -292,4 +292,13 @@ public struct InMemoryDynamoDBCompositePrimaryKeyTableWithIndex<GSILogic: Dynamo
         return self.primaryTable.monomorphicExecute(partitionKeys: partitionKeys, attributesFilter: attributesFilter,
                                                     additionalWhereClause: additionalWhereClause, nextToken: nextToken)
     }
+    
+    public func initializeWriteTransaction() -> DynamoDBWriteTransaction {
+        let mainTableWriteTransaction = self.primaryTable.createWriteTransaction()
+        
+        return InMemoryDynamoDBWriteTransactionWithIndex(mainTableWriteTransaction: mainTableWriteTransaction,
+                                                         gsiDataStore: self.gsiDataStore,
+                                                         gsiLogic: self.gsiLogic,
+                                                         eventLoop: self.eventLoop)
+    }
 }
