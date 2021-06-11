@@ -20,6 +20,10 @@ import SmokeHTTPClient
 import DynamoDBModel
 import NIO
 
+#if compiler(>=5.5) && $AsyncAwait
+import _NIOConcurrency
+#endif
+
 /**
  Enumeration of the errors that can be thrown by a DynamoDBTable.
  */
@@ -148,6 +152,46 @@ public protocol DynamoDBCompositePrimaryKeyTable {
                                                              exclusiveStartKey: String?)
         -> EventLoopFuture<([ReturnedType], String?)>
     
+#if compiler(>=5.5) && $AsyncAwait
+    
+    /**
+     * Queries a partition in the database table and optionally a sort key condition. If the
+       partition doesn't exist, this operation will return an empty list as a response. This
+       function will potentially make multiple calls to DynamoDB to retrieve all results for
+       the query.
+     */
+    @available(macOS 9999, iOS 9999, watchOS 9999, tvOS 9999, *)
+    func query<ReturnedType: PolymorphicOperationReturnType>(forPartitionKey partitionKey: String,
+                                                             sortKeyCondition: AttributeCondition?) async throws
+    -> [ReturnedType]
+
+    /**
+     * Queries a partition in the database table and optionally a sort key condition. If the
+       partition doesn't exist, this operation will return an empty list as a response. This
+       function will return paginated results based on the limit and exclusiveStartKey provided.
+     */
+    @available(macOS 9999, iOS 9999, watchOS 9999, tvOS 9999, *)
+    func query<ReturnedType: PolymorphicOperationReturnType>(forPartitionKey partitionKey: String,
+                                                             sortKeyCondition: AttributeCondition?,
+                                                             limit: Int?,
+                                                             exclusiveStartKey: String?) async throws
+    -> ([ReturnedType], String?)
+    
+    /**
+     * Queries a partition in the database table and optionally a sort key condition. If the
+       partition doesn't exist, this operation will return an empty list as a response. This
+       function will return paginated results based on the limit and exclusiveStartKey provided.
+     */
+    @available(macOS 9999, iOS 9999, watchOS 9999, tvOS 9999, *)
+    func query<ReturnedType: PolymorphicOperationReturnType>(forPartitionKey partitionKey: String,
+                                                             sortKeyCondition: AttributeCondition?,
+                                                             limit: Int?,
+                                                             scanIndexForward: Bool,
+                                                             exclusiveStartKey: String?) async throws
+    -> ([ReturnedType], String?)
+    
+#endif
+    
     /**
      * Uses the ExecuteStatement API to perform batch reads or writes on data stored in DynamoDB, using PartiQL.
      * ExecuteStatement API has a maximum limit on the number of decomposed read operations per request. This function handles pagination internally.
@@ -226,4 +270,43 @@ public protocol DynamoDBCompositePrimaryKeyTable {
         partitionKeys: [String],
         attributesFilter: [String]?,
         additionalWhereClause: String?, nextToken: String?) -> EventLoopFuture<([TypedDatabaseItem<AttributesType, ItemType>], String?)>
+}
+
+// For async/await APIs, simply delegate to the EventLoopFuture implementation until support is dropped for Swift <5.5
+public extension DynamoDBCompositePrimaryKeyTable {
+#if compiler(>=5.5) && $AsyncAwait
+    @available(macOS 9999, iOS 9999, watchOS 9999, tvOS 9999, *)
+    func query<ReturnedType: PolymorphicOperationReturnType>(forPartitionKey partitionKey: String,
+                                                             sortKeyCondition: AttributeCondition?) async throws
+    -> [ReturnedType] {
+        return try await query(forPartitionKey: partitionKey,
+                               sortKeyCondition: sortKeyCondition).get()
+    }
+    
+    @available(macOS 9999, iOS 9999, watchOS 9999, tvOS 9999, *)
+    func query<ReturnedType: PolymorphicOperationReturnType>(forPartitionKey partitionKey: String,
+                                                             sortKeyCondition: AttributeCondition?,
+                                                             limit: Int?,
+                                                             exclusiveStartKey: String?) async throws
+    -> ([ReturnedType], String?) {
+        return try await query(forPartitionKey: partitionKey,
+                               sortKeyCondition: sortKeyCondition,
+                               limit: limit,
+                               exclusiveStartKey: exclusiveStartKey).get()
+    }
+    
+    @available(macOS 9999, iOS 9999, watchOS 9999, tvOS 9999, *)
+    func query<ReturnedType: PolymorphicOperationReturnType>(forPartitionKey partitionKey: String,
+                                                             sortKeyCondition: AttributeCondition?,
+                                                             limit: Int?,
+                                                             scanIndexForward: Bool,
+                                                             exclusiveStartKey: String?) async throws
+    -> ([ReturnedType], String?) {
+        return try await query(forPartitionKey: partitionKey,
+                               sortKeyCondition: sortKeyCondition,
+                               limit: limit,
+                               scanIndexForward: scanIndexForward,
+                               exclusiveStartKey: exclusiveStartKey).get()
+    }
+#endif
 }
