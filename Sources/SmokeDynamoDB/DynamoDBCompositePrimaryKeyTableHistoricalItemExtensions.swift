@@ -165,6 +165,78 @@ public extension DynamoDBCompositePrimaryKeyTable {
         }
     }
     
+#if compiler(>=5.5) && $AsyncAwait
+    /**
+     * Historical items exist across multiple rows. This method provides an interface to record all
+     * rows in a single call.
+     */
+    @available(macOS 9999, iOS 9999, watchOS 9999, tvOS 9999, *)
+    func insertItemWithHistoricalRow<AttributesType, ItemType>(primaryItem: TypedDatabaseItem<AttributesType, ItemType>,
+                                                               historicalItem: TypedDatabaseItem<AttributesType, ItemType>) async throws {
+        try await insertItem(primaryItem)
+        try await insertItem(historicalItem)
+    }
+
+    @available(macOS 9999, iOS 9999, watchOS 9999, tvOS 9999, *)
+    func updateItemWithHistoricalRow<AttributesType, ItemType>(primaryItem: TypedDatabaseItem<AttributesType, ItemType>,
+                                                               existingItem: TypedDatabaseItem<AttributesType, ItemType>,
+                                                               historicalItem: TypedDatabaseItem<AttributesType, ItemType>) async throws {
+        try await updateItem(newItem: primaryItem, existingItem: existingItem)
+        try await insertItem(historicalItem)
+    }
+    
+    /**
+      Operations will attempt to update the primary item, repeatedly calling the
+      `primaryItemProvider` to retrieve an updated version of the current row
+      until the appropriate  `update` operation succeeds. The
+      `primaryItemProvider` can thrown an exception to indicate that the current
+      row is unable to be updated. The `historicalItemProvider` is called to
+      provide the historical item based on the primary item that was
+      inserted into the database table.
+
+     - Parameters:
+        - compositePrimaryKey: The composite key for the version to update.
+        - primaryItemProvider: Function to provide the updated item or throw if the current item can't be updated.
+        - historicalItemProvider: Function to provide the historical item for the primary item.
+     */
+    @available(macOS 9999, iOS 9999, watchOS 9999, tvOS 9999, *)
+    func conditionallyUpdateItemWithHistoricalRow<AttributesType, ItemType>(
+            compositePrimaryKey: CompositePrimaryKey<AttributesType>,
+            primaryItemProvider: @escaping (TypedDatabaseItem<AttributesType, ItemType>) async throws -> TypedDatabaseItem<AttributesType, ItemType>,
+            historicalItemProvider: @escaping (TypedDatabaseItem<AttributesType, ItemType>) -> TypedDatabaseItem<AttributesType, ItemType>,
+            withRetries retries: Int = 10) async throws -> TypedDatabaseItem<AttributesType, ItemType> {
+        guard retries > 0 else {
+             throw SmokeDynamoDBError.concurrencyError(partitionKey: compositePrimaryKey.partitionKey,
+                                                       sortKey: compositePrimaryKey.sortKey,
+                                                       message: "Unable to complete request to update versioned item in specified number of attempts")
+        }
+        
+        let existingItemOptional: TypedDatabaseItem<AttributesType, ItemType>? = try await getItem(forKey: compositePrimaryKey)
+        
+        guard let existingItem = existingItemOptional else {
+            throw SmokeDynamoDBError.conditionalCheckFailed(partitionKey: compositePrimaryKey.partitionKey,
+                                                            sortKey: compositePrimaryKey.sortKey,
+                                                            message: "Item not present in database.")
+        }
+        
+        let updatedItem = try await primaryItemProvider(existingItem)
+        let historicalItem = historicalItemProvider(updatedItem)
+
+        do {
+            try await updateItemWithHistoricalRow(primaryItem: updatedItem,
+                                                  existingItem: existingItem,
+                                                  historicalItem: historicalItem)
+        } catch SmokeDynamoDBError.conditionalCheckFailed {
+            // try again
+            return try await conditionallyUpdateItemWithHistoricalRow(compositePrimaryKey: compositePrimaryKey,
+                                                                      primaryItemProvider: primaryItemProvider,
+                                                                      historicalItemProvider: historicalItemProvider, withRetries: retries - 1)
+        }
+        
+        return updatedItem
+    }
+#endif
+    
     func conditionallyUpdateItemWithHistoricalRow<AttributesType, ItemType>(
             compositePrimaryKey: CompositePrimaryKey<AttributesType>,
             primaryItemProvider: @escaping (TypedDatabaseItem<AttributesType, ItemType>) -> EventLoopFuture<TypedDatabaseItem<AttributesType, ItemType>>,
